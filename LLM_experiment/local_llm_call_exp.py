@@ -18,6 +18,9 @@ print("模型和分词器加载完成！")
 
 user_input = ""
 model_response = ""
+messages = [
+        {"role": "system", "content": "You are a helpful assistant but can only use emoji to reply user."}
+]
 
 while True: 
     user_input = input("You: ")
@@ -26,10 +29,7 @@ while True:
         break
 
     # 准备对话输入
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": f"{user_input}"}
-    ]
+    messages.append({"role": "user", "content": user_input})
 
     # 使用分词器的模板格式化输入
     text = tokenizer.apply_chat_template(
@@ -63,3 +63,4 @@ while True:
 
     print("\n模型的回答:")
     print(model_response)
+    messages.append({"role": "assistant", "content": model_response})
