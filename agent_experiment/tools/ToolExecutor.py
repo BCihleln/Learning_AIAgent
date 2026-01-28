@@ -32,6 +32,45 @@ class ToolExecutor:
             for name, info in self.tools.items()
         ])
 
+
+import inspect
+def CheckToolParameterSatisfied(tool: callable, kwargs:dict) -> tuple[bool, dict, str]:
+    """
+    檢查 LLM 是否正確提供了工具所需的參數
+    
+    :param tool: LLM 呼叫的工具函數，透過 ToolExecutor 轉換為 Python 函數
+    :type tool: callable
+    :param kwargs: LLM 提供的函數參數
+    :type kwargs: dict
+    :return: 正確返回 (True, 工具必須的參數, "")；否則返回 (False, 錯誤原因字串)
+    :rtype: tuple[bool, dict, str]
+    """
+    sig = inspect.signature(tool)
+    required_params = {
+        name
+        for (name, p) in sig.parameters.items()
+        if p.default is inspect.Parameter.empty
+    }
+    all_params = set(sig.parameters.keys())
+    provided_params = set(kwargs.keys())
+
+    missing_params = required_params - provided_params
+    extra_params = provided_params - all_params
+
+    if not missing_params: # 若不存在缺失參數
+        kwargs_required = {
+            name: kwargs[name]
+            for name in kwargs - extra_params
+        }
+        return (True, kwargs_required, "參數正確可調用工具")
+    else:
+        error_details = []
+        error_details.append(f"缺少參數: {', '.join(missing_params)}")
+        if extra_params:
+            error_details.append(f"多餘參數: {', '.join(extra_params)}")
+        return (False, {}, f"錯誤: 工具的參數不匹配。{' '.join(error_details)}")
+        
+
 # --- 工具初始化与使用示例 ---
 if __name__ == '__main__':
 
@@ -61,7 +100,6 @@ if __name__ == '__main__':
         print(observation)
     else:
         print(f"错误:未找到名为 '{tool_name}' 的工具。")
-        
 
 """
 >>>

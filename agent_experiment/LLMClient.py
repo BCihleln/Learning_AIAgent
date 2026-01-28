@@ -61,12 +61,13 @@ class HelloAgentsLLM_Local:
     为本书 "Hello Agents" 定制的本地LLM客户端。
     它用于调用本地加载的大语言模型（如Qwen）。
     """
-    def __init__(self, model_id: str = None):
+    def __init__(self, model_id: str = None, default_temperature: float = 0.8):
         """
         初始化客户端。加载本地模型。
         """
         self.model_id = model_id or os.getenv("LLM_LOCAL_MODEL_ID", "Qwen/Qwen1.5-0.5B-Chat")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.default_temperature = default_temperature
         
         try:
             print(f"🔄 正在加载本地模型: {self.model_id}")
@@ -98,7 +99,7 @@ class HelloAgentsLLM_Local:
             generated_ids = self.model.generate(
                 model_inputs.input_ids,
                 max_new_tokens=512,
-                temperature=temperature if temperature > 0 else 1.0,
+                temperature=temperature if temperature > 0 else self.default_temperature,
                 do_sample=temperature > 0
             )
 

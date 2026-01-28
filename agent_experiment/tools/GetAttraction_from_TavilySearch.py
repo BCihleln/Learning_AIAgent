@@ -46,3 +46,8 @@ def get_attraction(city: str, weather: str) -> str:
 
     except Exception as e:
         return f"错误:执行Tavily搜索时出现问题 - {e}"
+
+# 查詢旅遊景點 Agent 工具示例
+if __name__ == '__main__':
+    result = get_attraction(city="深圳", weather="rainy")
+    print(result)

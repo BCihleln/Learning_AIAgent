@@ -1,11 +1,26 @@
 # modified from ./agent_first_try.py
 
-AGENT_SYSTEM_PROMPT = """
+# Tools
+from agent_experiment.tools.ToolExecutor import ToolExecutor
+from agent_experiment.tools.GetWeather_from_wttrin import get_weather
+from agent_experiment.tools.GetAttraction_from_TavilySearch import get_attraction
+
+toolExecutor = ToolExecutor()
+toolExecutor.registerTool(
+    "get_weather", 
+    description="(city: str )查询指定城市的实时天气。", 
+    func=get_weather)
+toolExecutor.registerTool(
+    "get_attraction", 
+    description="(city: str , weather: str )根据城市和天气搜索推荐的旅游景点。", 
+    func=get_attraction)
+available_tools = toolExecutor.getAvailableTools()
+
+AGENT_SYSTEM_PROMPT = f"""
 你是一个智能旅行助手。你的任务是分析用户的请求，并使用可用工具一步步地解决问题。
 
 # 可用工具:
-- `get_weather(city: str)`: 查询指定城市的实时天气。
-- `get_attraction(city: str, weather: str)`: 根据城市和天气搜索推荐的旅游景点。
+{available_tools}
 
 # 输出格式要求:
 你的每次回复必须严格遵循以下格式，包含一对Thought和Action：
@@ -25,33 +40,10 @@ Action的格式必须是以下之一：
 请开始吧！
 """
 
-# Tools
-from agent_experiment.tools.ToolExecutor import ToolExecutor
-from agent_experiment.tools.GetWeather_from_wttrin import get_weather
-from agent_experiment.tools.GetAttraction_from_TavilySearch import get_attraction
-
-toolExecutor = ToolExecutor()
-toolExecutor.registerTool("Get_Weather", "使用此工具查詢指定日期的天氣", get_weather)
-toolExecutor.registerTool("Get_Attraction", "使用此工具查詢旅遊地點", get_attraction)
-available_tools = toolExecutor.getAvailableTools()
-
 import re
-import os
+from agent_experiment.tools.ToolExecutor import CheckToolParameterSatisfied
 
 # --- 1. 配置LLM客户端 ---
-# 请根据您使用的服务，将这里替换成对应的凭证和地址
-# API_KEY = "YOUR_API_KEY" 
-# BASE_URL = "YOUR_BASE_URL" 
-# MODEL_ID = "YOUR_MODEL_ID" 
-# TAVILY_API_KEY="YOUR_Tavily_KEY" 
-# os.environ['TAVILY_API_KEY'] = "YOUR_TAVILY_API_KEY" 
-
-# llm = OpenAICompatibleClient(
-#     model=MODEL_ID,
-#     api_key=API_KEY,
-#     base_url=BASE_URL
-# )
-
 from agent_experiment.LLMClient import HelloAgentsLLM_Local
 llm = HelloAgentsLLM_Local()
 
@@ -87,6 +79,7 @@ for i in range(5): # 设置最大循环次数
             print("已截断多余的 Thought-Action 对")
     print(f"模型输出:\n{llm_output}\n")
     prompt_history.append(llm_output)
+    # TODO 擷取多餘輸出對似乎有問題，待 Debug
     
     # 3.3. 解析并执行行动
     action_match = re.search(r"Action: (.*)", llm_output, re.DOTALL)
@@ -105,12 +98,21 @@ for i in range(5): # 设置最大循环次数
     
     tool_name = re.search(r"(\w+)\(", action_str).group(1)
     args_str = re.search(r"\((.*)\)", action_str).group(1)
-    kwargs = dict(re.findall(r'(\w+)="([^"]*)"', args_str))
+    kwargs = dict(re.findall(r'(\w+)[=:]?\s+"([^"]*)"', args_str)) # 盡可能匹配模型輸出的調用字串
 
-    if tool_name in available_tools:
-        observation = toolExecutor.getTool(tool_name)
-    else:
+    if not tool_name in available_tools:
         observation = f"错误:未定义的工具 '{tool_name}'"
+    else: # 模型正確調用工具
+        tool = toolExecutor.getTool(tool_name)
+        
+        # 檢查 LLM 是否提供了工具函數所需求的參數
+        is_satisfied, required_kwargs, error_msg = CheckToolParameterSatisfied(tool, kwargs)
+        
+        if is_satisfied:
+            observation = tool(**required_kwargs) # 運行 tool 並將結果存入觀察
+        else:
+            observation = error_msg # 返回錯誤結果
+        
 
     # 3.4. 记录观察结果
     observation_str = f"Observation: {observation}"
