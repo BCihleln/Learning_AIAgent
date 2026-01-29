@@ -50,7 +50,7 @@ class ReActAgent:
 
             # 2. 调用LLM进行思考
             messages = [{"role": "user", "content": prompt}]
-            response_text = self.llm_client.think(messages=messages)
+            response_text = self.llm_client.generate_response(messages=messages)
             
             if not response_text:
                 print("错误:LLM未能返回有效响应。")

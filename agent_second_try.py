@@ -22,72 +22,66 @@ AGENT_SYSTEM_PROMPT = f"""
 # 可用工具:
 {available_tools}
 
-# 输出格式要求:
-你的每次回复必须严格遵循以下格式，包含一对Thought和Action：
+# 回覆說明:
+如果你想要調用工具，每次回复的文字末尾必須包含一個 Action，調用工具後將會返回給你工具調用結果，結果可能為正確或錯誤，需要在下輪對話中繼續判斷。如果用戶輸入為空，請勿輸出任何 Action，並提示用戶進行輸入。
 
-Thought: [你的思考过程和下一步计划]
+# Action 格式要求
+
 Action: [你要执行的具体行动]
 
-Action的格式必须是以下之一：
-1. 调用工具：function_name(arg_name="arg_value")
-2. 结束任务：Finish[最终答案]
+具體行動的格式必须是以下之一，其他語句將不被接受：
+1. function_name(arg_name= "arg_value")
+    代表你的具體行動是調用工具
+2. Finish["最终答案"]
+    代表你的具體行動是結束任務，並將最終答案的文字填入[]中
 
 # 重要提示:
-- 每次只输出一对Thought-Action
-- Action必须在同一行，不要换行
-- 当收集到足够信息可以回答用户问题时，必须使用 Action: Finish[最终答案] 格式结束
+- 不可有複數個 Action，不可有複數個 Action，不可有複數個 Action！
 
-请开始吧！
+請開始吧~ /no_think
 """
 
 import re
 from agent_experiment.tools.ToolExecutor import CheckToolParameterSatisfied
 
+# TODO 調用工具的解析強烈地與系統提示詞綁定，且目前使用模型會自行產生工具調用結果的幻覺，可能需要查閱已定義好的 Agent 調用方式
+
 # --- 1. 配置LLM客户端 ---
 from agent_experiment.LLMClient import HelloAgentsLLM_Local
-llm = HelloAgentsLLM_Local()
+llm = HelloAgentsLLM_Local(AGENT_SYSTEM_PROMPT)
 
 # --- 2. 初始化 ---
 
 # user_input = input("You: ") # e.g. 写一个快速排序算法
 user_prompt = "你好，请帮我查询一下今天北京的天气，然后根据天气推荐一个合适的旅游景点。"
-prompt_history = [f"用户请求: {user_prompt}"]
 
 print(f"用户输入: {user_prompt}\n" + "="*40)
 
+observation:str = user_prompt
 # --- 3. 运行主循环 ---
 for i in range(5): # 设置最大循环次数
     print(f"--- 循环 {i+1} ---\n")
-    
-    # 3.1. 构建Prompt
-    full_prompt = "\n".join(prompt_history)
-    
+        
     # 3.2. 调用LLM进行思考
-    # llm_output = llm.generate(full_prompt, system_prompt=AGENT_SYSTEM_PROMPT)
-    exampleMessages = [
-            {"role": "system", "content": f"{AGENT_SYSTEM_PROMPT}"},
-            {"role": "user", "content": f"{full_prompt}"}
-        ]
+    llm_output = llm.generate_response(observation)
 
-    llm_output = llm.think(exampleMessages)
     # 模型可能会输出多余的Thought-Action，需要截断
-    match = re.search(r'(Thought:.*?Action:.*?)(?=\n\s*(?:Thought:|Action:|Observation:)|\Z)', llm_output, re.DOTALL)
-    if match:
-        truncated = match.group(1).strip()
-        if truncated != llm_output.strip():
-            llm_output = truncated
-            print("已截断多余的 Thought-Action 对")
-    print(f"模型输出:\n{llm_output}\n")
-    prompt_history.append(llm_output)
     # TODO 擷取多餘輸出對似乎有問題，待 Debug
+    # match = re.search(r'(Action:.*?)(?=\n\s*(?:Action:|Observation:)|\Z)', llm_output, re.DOTALL)
+    # if match:
+    #     truncated = match.group(1).strip()
+    #     if truncated != llm_output.strip():
+    #         llm_output = truncated
+    #         print("已截断多余的 Thought-Action 对")
+
+    print(f"模型输出:\n{llm_output}\n")
     
     # 3.3. 解析并执行行动
     action_match = re.search(r"Action: (.*)", llm_output, re.DOTALL)
     if not action_match:
-        observation = "错误: 未能解析到 Action 字段。请确保你的回复严格遵循 'Thought: ... Action: ...' 的格式。"
+        observation = "错误: 未能解析到 Action 字段。请确保你的回复严格遵循 'Action: ...' 的格式。"
         observation_str = f"Observation: {observation}"
         print(f"{observation_str}\n" + "="*40)
-        prompt_history.append(observation_str)
         continue
     action_str = action_match.group(1).strip()
 
@@ -98,7 +92,7 @@ for i in range(5): # 设置最大循环次数
     
     tool_name = re.search(r"(\w+)\(", action_str).group(1)
     args_str = re.search(r"\((.*)\)", action_str).group(1)
-    kwargs = dict(re.findall(r'(\w+)[=:]?\s+"([^"]*)"', args_str)) # 盡可能匹配模型輸出的調用字串
+    kwargs = dict(re.findall(r'(\w+)[=:]?\s*"([^"]*)"', args_str)) # 盡可能匹配模型輸出的調用字串
 
     if not tool_name in available_tools:
         observation = f"错误:未定义的工具 '{tool_name}'"
@@ -114,7 +108,6 @@ for i in range(5): # 设置最大循环次数
             observation = error_msg # 返回錯誤結果
         
 
-    # 3.4. 记录观察结果
+    # 3.4. 观察结果
     observation_str = f"Observation: {observation}"
     print(f"{observation_str}\n" + "="*40)
-    prompt_history.append(observation_str)

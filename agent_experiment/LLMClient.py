@@ -53,7 +53,6 @@ class HelloAgentsLLM:
             return None
 
 
-import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 class HelloAgentsLLM_Local:
@@ -61,59 +60,55 @@ class HelloAgentsLLM_Local:
     为本书 "Hello Agents" 定制的本地LLM客户端。
     它用于调用本地加载的大语言模型（如Qwen）。
     """
-    def __init__(self, model_id: str = None, default_temperature: float = 0.8):
+
+    # TODO 解決系統提示詞被當作普通提示詞的問題
+
+    def __init__(self, system_prompt: str, model_name: str = "Qwen/Qwen3-0.6B"):
         """
         初始化客户端。加载本地模型。
         """
-        self.model_id = model_id or os.getenv("LLM_LOCAL_MODEL_ID", "Qwen/Qwen1.5-0.5B-Chat")
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.default_temperature = default_temperature
-        
-        try:
-            print(f"🔄 正在加载本地模型: {self.model_id}")
-            print(f"📱 使用设备: {self.device}")
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_id)
-            self.model = AutoModelForCausalLM.from_pretrained(self.model_id).to(self.device)
-            print("✅ 模型和分词器加载完成！")
-        except Exception as e:
-            raise ValueError(f"❌ 加载模型失败: {e}")
+        self.model_name = model_name
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
+        self.history = []
 
-    def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
+        print(f"🔄 加载本地模型: {self.model_name}")
+        print(f"📱 使用设备: {self.model.device}")
+
+        response = self.generate_response(system_prompt, role="system")
+        print(response)
+
+    def generate_response(self, user_input, role: str = "user") -> str:
         """
         调用本地LLM进行思考，并返回其响应。
         """
-        print(f"🧠 本地模型 {self.model_id} 正在生成回答...")
+        print(f"🧠 本地模型 {self.model_name} 正在生成回答...")
+        messages = self.history + [{"role": role, "content": user_input}]
+
         try:
             # 使用分词器的模板格式化输入
             text = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=True,
-                tie_word_embeddings=False
+                add_generation_prompt=True
             )
 
             # 编码输入文本
-            model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
+            model_inputs = self.tokenizer(text, return_tensors="pt").to(self.model.device)
 
             # 使用模型生成回答
-            generated_ids = self.model.generate(
-                model_inputs.input_ids,
-                max_new_tokens=512,
-                temperature=temperature if temperature > 0 else self.default_temperature,
-                do_sample=temperature > 0
-            )
-
-            # 截取掉输入部分，只保留新生成的部分
-            generated_ids = [
-                output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-            ]
+            response_ids = self.model.generate(
+                **model_inputs,
+                max_new_tokens=32768
+            )[0][len(model_inputs.input_ids[0]):].tolist()
 
             # 解码生成的 Token ID
-            response_text = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            response = self.tokenizer.decode(response_ids, skip_special_tokens=True)
             
-            # print("✅ LLM响应成功:")
-            # print(response_text)
-            return response_text
+            self.history.append({"role": "user", "content": user_input})
+            self.history.append({"role": "assistant", "content": response})
+            
+            return response
 
         except Exception as e:
             print(f"❌ 调用本地LLM时发生错误: {e}")
@@ -125,17 +120,11 @@ if __name__ == '__main__':
         # llmClient = HelloAgentsLLM()
         llmClient = HelloAgentsLLM_Local()
         
-        user_input = input("You: ") # e.g. 写一个快速排序算法
-        exampleMessages = [
-            {"role": "system", "content": "You are a helpful assistant that writes Python code."},
-            {"role": "user", "content": f"{user_input}"}
-        ]
+        user_input = input("You: ")
         
         print("--- 调用LLM ---")
-        responseText = llmClient.think(exampleMessages)
-        if responseText:
-            print("\n\n--- 完整模型响应 ---")
-            print(responseText)
+        responseText = llmClient.generate_response(user_input)
+        print(f"Bot: {responseText}")
 
     except ValueError as e:
         print(e)

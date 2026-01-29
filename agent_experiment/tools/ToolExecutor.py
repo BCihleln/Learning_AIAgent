@@ -60,7 +60,7 @@ def CheckToolParameterSatisfied(tool: callable, kwargs:dict) -> tuple[bool, dict
     if not missing_params: # 若不存在缺失參數
         kwargs_required = {
             name: kwargs[name]
-            for name in kwargs - extra_params
+            for name in kwargs.keys() - extra_params
         }
         return (True, kwargs_required, "參數正確可調用工具")
     else:
