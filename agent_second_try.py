@@ -38,13 +38,13 @@ Action: [你要执行的具体行动]
 # 重要提示:
 - 不可有複數個 Action，不可有複數個 Action，不可有複數個 Action！
 
-請開始吧~ /no_think
+請開始吧~
 """
 
 import re
 from agent_experiment.tools.ToolExecutor import CheckToolParameterSatisfied
 
-# TODO 調用工具的解析強烈地與系統提示詞綁定，且目前使用模型會自行產生工具調用結果的幻覺，可能需要查閱已定義好的 Agent 調用方式
+# Insights 調用工具的解析強烈地與系統提示詞綁定，且目前使用模型會自行產生工具調用結果的幻覺，可能需要查閱已定義好的 Agent 調用方式
 
 # --- 1. 配置LLM客户端 ---
 from agent_experiment.LLMClient import HelloAgentsLLM_Local

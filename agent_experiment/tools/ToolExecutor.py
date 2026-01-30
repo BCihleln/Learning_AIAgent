@@ -7,11 +7,11 @@ class ToolExecutor:
     def __init__(self):
         self.tools: Dict[str, Dict[str, Any]] = {}
 
-    def registerTool(self, name: str, description: str, func: callable):
+    def registerTool(self, func: callable, description: str):
         """
         向工具箱中注册一个新工具。
         """
-        name = name.lower()
+        name = func.__name__
         if name in self.tools:
             print(f"警告:工具 '{name}' 已存在，将被覆盖。")
         self.tools[name] = {"description": description, "func": func}
@@ -82,14 +82,14 @@ if __name__ == '__main__':
 
     # 2. 注册我们的实战搜索工具
     tool_instruction = "一个网页搜索引擎。当你需要回答关于时事、事实以及在你的知识库中找不到的信息时，应使用此工具。"
-    toolExecutor.registerTool("Search", tool_instruction, search)
+    toolExecutor.registerTool(search, tool_instruction)
     
     # 3. 打印可用的工具
     print("\n--- 可用的工具 ---")
     print(toolExecutor.getAvailableTools())
 
     # 4. 智能体的Action调用，这次我们问一个实时性的问题
-    tool_name = "Search"
+    tool_name = "search"
     tool_input = "英伟达最新的GPU型号是什么"
     print(f"\n--- 执行 Action: {tool_name}['{tool_input}'] ---")
 

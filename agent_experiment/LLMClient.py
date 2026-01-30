@@ -52,6 +52,7 @@ class HelloAgentsLLM:
             print(f"❌ 调用LLM API时发生错误: {e}")
             return None
 
+DEFAULT_SYSTEM_PROMT = "你是一個人工智能助手"
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -61,36 +62,28 @@ class HelloAgentsLLM_Local:
     它用于调用本地加载的大语言模型（如Qwen）。
     """
 
-    # TODO 解決系統提示詞被當作普通提示詞的問題
-
-    def __init__(self, system_prompt: str, model_name: str = "Qwen/Qwen3-0.6B"):
+    def __init__(self, model_name: str = "Qwen/Qwen3-0.6B"):
         """
         初始化客户端。加载本地模型。
         """
         self.model_name = model_name
         self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
         self.model = AutoModelForCausalLM.from_pretrained(self.model_name)
-        self.history = []
 
         print(f"🔄 加载本地模型: {self.model_name}")
         print(f"📱 使用设备: {self.model.device}")
 
-        response = self.generate_response(system_prompt, role="system")
-        print(response)
-
-    def generate_response(self, user_input, role: str = "user") -> str:
+    def think(self, messages: List[Dict[str, str]], temperature: float = 0) -> str:
         """
-        调用本地LLM进行思考，并返回其响应。
+        HelloAgent LLM API, 调用LLM进行思考，并返回其响应。
         """
         print(f"🧠 本地模型 {self.model_name} 正在生成回答...")
-        messages = self.history + [{"role": role, "content": user_input}]
-
         try:
-            # 使用分词器的模板格式化输入
             text = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
-                add_generation_prompt=True
+                add_generation_prompt=True,
+                enable_thinking=False
             )
 
             # 编码输入文本
@@ -105,29 +98,24 @@ class HelloAgentsLLM_Local:
             # 解码生成的 Token ID
             response = self.tokenizer.decode(response_ids, skip_special_tokens=True)
             
-            self.history.append({"role": "user", "content": user_input})
-            self.history.append({"role": "assistant", "content": response})
-            
             return response
 
         except Exception as e:
-            print(f"❌ 调用本地LLM时发生错误: {e}")
+            print(f"❌ 调用LLM API时发生错误: {e}")
             return None
 
 # --- 客户端使用示例 ---
 if __name__ == '__main__':
-    try:
-        # llmClient = HelloAgentsLLM()
-        llmClient = HelloAgentsLLM_Local()
-        
-        user_input = input("You: ")
-        
-        print("--- 调用LLM ---")
-        responseText = llmClient.generate_response(user_input)
-        print(f"Bot: {responseText}")
-
-    except ValueError as e:
-        print(e)
+    
+    # llmClient = HelloAgentsLLM()
+    llmClient = HelloAgentsLLM_Local()
+    
+    user_input = input("You: ")
+    messages = [{"role": "user", "content": user_input}]
+    
+    print("--- 调用LLM ---")
+    responseText = llmClient.think(messages)
+    print(f"Bot: {responseText}")
 
 ''' >>>
 --- 调用LLM ---
